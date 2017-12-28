@@ -1,5 +1,3 @@
-let s:placeholder_texts = []
-
 let s:startdelim = get(g:, 'usnip_startdelim', '{{+')
 let s:enddelim = get(g:, 'usnip_enddelim', '+}}')
 let s:evalmarker = get(g:, 'usnip_evalmarker', '~')
@@ -7,28 +5,57 @@ let s:backrefmarker = get(g:, 'usnip_backrefmarker', '\\~')
 
 let s:delimpat = '\V' . s:startdelim . '\.\{-}' . s:enddelim
 
-function! usnip#should_trigger() abort
-    return search(s:delimpat, 'e')
-endfunction
+func! usnip#should_trigger() abort
+    silent! unlet! s:snippetfile
+    let l:cword = matchstr(getline('.'), '\v\f+%' . col('.') . 'c')
 
-" main function, called on press of Tab (or whatever key Minisnip is bound to)
-function! usnip#expand() abort
-    " Make sure '< mark is set so the normal command won't error out.
-    if getpos("'<") == [0, 0, 0, 0]
-        call setpos("'<", getpos('.'))
+    let l:dirs = join(s:directories(), ',')
+    let l:all = globpath(l:dirs, l:cword.'.snip', 0, 1)
+    call filter(l:all, {_, path -> filereadable(path)})
+
+    if len(l:all) > 0
+        let s:snippetfile = l:all[0]
+        return 1
     endif
 
-    " save the current placeholder's text so we can backref it
-    let l:old_s = @s
-    normal! ms"syv`<`s
-    let s:placeholder_text = @s
-    let @s = l:old_s
-    " jump to the next placeholder
-    call s:select_placeholder()
-endfunction
+    return search(s:delimpat, 'e')
+endfunc
+
+" main func, called on press of Tab (or whatever key Minisnip is bound to)
+func! usnip#expand() abort
+    if exists('s:snippetfile')
+        " reset placeholder text history (for backrefs)
+        let s:placeholder_texts = []
+        let s:placeholder_text = ''
+        " remove the snippet name
+        normal! "_diw
+        " adjust the indentation, use the current line as reference
+        let l:ws = matchstr(getline(line('.')), '^\s\+')
+        let l:lns = map(readfile(s:snippetfile), 'empty(v:val)? v:val : l:ws.v:val')
+        " insert the snippet
+        call append(line('.'), l:lns)
+        " remove the empty line before the snippet
+        normal! "_dd
+        " select the first placeholder
+        call s:select_placeholder()
+    else
+        " Make sure '< mark is set so the normal command won't error out.
+        if getpos("'<") == [0, 0, 0, 0]
+            call setpos("'<", getpos('.'))
+        endif
+
+        " save the current placeholder's text so we can backref it
+        let l:old_s = @s
+        normal! ms"syv`<`s
+        let s:placeholder_text = @s
+        let @s = l:old_s
+        " jump to the next placeholder
+        call s:select_placeholder()
+    endif
+endfunc
 
 " this is the function that finds and selects the next placeholder
-function! s:select_placeholder() abort
+func! s:select_placeholder() abort
     " don't clobber s register
     let l:old_s = @s
 
@@ -42,8 +69,7 @@ function! s:select_placeholder() abort
         let [l:ws, &ws] = [&ws, 1]
         silent keeppatterns execute 'normal! /' . s:delimpat . "/e\<cr>gn\"sy"
     catch /E486:/
-        " There's no placeholder at all, enter insert mode
-        call feedkeys('i', 'n')
+        " There's no placeholder at all
         return
     finally
         let &ws = l:ws
@@ -86,16 +112,11 @@ function! s:select_placeholder() abort
 
     " restore old value of s register
     let @s = l:old_s
-endfunction
+endfunc
 
 func! usnip#done(item) abort
     if empty(a:item)
         return
-    endif
-
-    if match(a:item.word, '[\x0]') != -1
-        keeppatterns silent! substitute /[\x0]/\r/g
-        norm! '[=']
     endif
 
     if match(a:item.word, s:delimpat) != -1
@@ -135,7 +156,8 @@ func! s:build_comp(_, path) abort
     return {
                 \ 'icase': 1,
                 \ 'dup': 1,
-                \ 'word': join(l:content, "\n"),
+                \ 'kind': 's',
+                \ 'word': l:name,
                 \ 'abbr': l:name,
                 \ 'menu': l:content[0],
                 \ 'info': join(l:content, "\n"),

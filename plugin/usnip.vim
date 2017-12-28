@@ -1,12 +1,17 @@
+" Minimal snippeting plugin
+" Last change: 2018-03-16
+" Maintainer: Hauleth <lukasz@niemier.pl>
+" License: MIT
+
 if exists('g:loaded_usnip')
     finish
 endif
 let g:loaded_usnip = 1
 
-inoremap <expr> <Plug>(usnip-next) usnip#should_trigger() ?
-            \"\<c-o>:call \usnip#expand()\<cr>" : v:char
-snoremap <expr> <Plug>(usnip-next) usnip#should_trigger() ?
-            \"\<c-o>:call \usnip#expand()\<cr>" : v:char
+inoremap <expr> <silent> <Plug>(usnip-next) usnip#should_trigger() ?
+            \"x\<bs>\<c-o>:call usnip#expand()\<cr>" : "\<tab>"
+snoremap <expr> <silent> <Plug>(usnip-next) usnip#should_trigger() ?
+            \"\<esc>:call usnip#expand()\<cr>" : "\<tab>"
 
 " add the default mappings if the user hasn't defined any
 if !hasmapto('<Plug>(usnip-next)')
@@ -14,7 +19,9 @@ if !hasmapto('<Plug>(usnip-next)')
     smap <unique> <Tab> <Plug>(usnip-next)
 endif
 
-set completefunc=usnip#complete
+if &completefunc is# ''
+    set completefunc=usnip#complete
+endif
 
 augroup usnip
     au!
